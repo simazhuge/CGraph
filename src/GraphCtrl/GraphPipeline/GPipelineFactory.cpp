@@ -7,7 +7,7 @@
 ***************************/
 
 #include "GPipelineFactory.h"
-
+#include "MemoryManager.h"
 CGRAPH_NAMESPACE_BEGIN
 
 GPipelinePtrList GPipelineFactory::s_pipeline_list_;
@@ -17,7 +17,8 @@ GPipelinePtr GPipelineFactory::create() {
     CGRAPH_FUNCTION_BEGIN
     CGRAPH_LOCK_GUARD lock(s_lock_);
 
-    auto pipeline = CGRAPH_SAFE_MALLOC_COBJECT(GPipeline)
+    auto ins = MemoryManager::get_const_instance();
+    auto pipeline = ins.createPipeine();
     s_pipeline_list_.emplace_back(pipeline);
     return pipeline;
 }
@@ -29,7 +30,8 @@ CStatus GPipelineFactory::remove(GPipelinePtr pipeline) {
 
     CGRAPH_LOCK_GUARD lock(s_lock_);
     s_pipeline_list_.remove(pipeline);
-    CGRAPH_DELETE_PTR(pipeline)
+    auto ins = MemoryManager::get_const_instance();
+    ins.deletePipeline(pipeline);
 
     CGRAPH_FUNCTION_END
 }
@@ -39,8 +41,9 @@ CStatus GPipelineFactory::clear() {
     CGRAPH_FUNCTION_BEGIN
     CGRAPH_LOCK_GUARD lock(s_lock_);
 
+    auto ins = MemoryManager::get_const_instance();
     for (GPipelinePtr pipeline : GPipelineFactory::s_pipeline_list_) {
-        CGRAPH_DELETE_PTR(pipeline)
+        ins.deletePipeline(pipeline);
     }
 
     s_pipeline_list_.clear();

@@ -22,10 +22,10 @@ void tutorial_simple() {
      * 注册节点，其中MyNode1和MyNode2必须为GNode的子类，否则无法通过编译。
      * status+= 操作，可以用于记录链路异常问题
      * */
-    CStatus status = pipeline->registerGElement<MyNode1>(&a, {}, "nodeA");    // 将名为nodeA，无执行依赖的node信息，注册入pipeline中
-    status += pipeline->registerGElement<MyNode2>(&b, {a}, "nodeB");    // 将名为nodeB，依赖a执行的node信息，注册入pipeline中
-    status += pipeline->registerGElement<MyNode1>(&c, {a}, "nodeC");
-    status += pipeline->registerGElement<MyNode2>(&d, {b, c}, "nodeD");    // 将名为nodeD，依赖{b,c}执行的node信息，注册入pipeline中
+    CStatus status = pipeline->registerGElement<MyNode1>(&a, {}, "");    // 将名为nodeA，无执行依赖的node信息，注册入pipeline中
+    status += pipeline->registerGElement<MyNode2>(&b, {a}, "");    // 将名为nodeB，依赖a执行的node信息，注册入pipeline中
+    status += pipeline->registerGElement<MyNode1>(&c, {a}, "");
+    status += pipeline->registerGElement<MyNode2>(&d, {b, c}, "");    // 将名为nodeD，依赖{b,c}执行的node信息，注册入pipeline中
     if (!status.isOK()) {
         return;    // 使用时，请对所有CGraph接口的返回值做判定。今后tutorial例子中省略该操作。
     }

@@ -22,10 +22,12 @@
 #include "../GraphEvent/GEventInclude.h"
 
 CGRAPH_NAMESPACE_BEGIN
-
+class MemoryManager;
 class GPipeline : public GPipelineObject,
                   public CDescInfo {
 public:
+    explicit GPipeline();
+    ~GPipeline() override;
     CStatus init() override;
 
     CStatus run() override;
@@ -356,8 +358,7 @@ public:
     CGRAPH_DECLARE_GPARAM_MANAGER_WRAPPER
 
 protected:
-    explicit GPipeline();
-    ~GPipeline() override;
+
 
 private:
     /**
@@ -392,6 +393,7 @@ private:
     friend class GPipelineFactory;
     friend class UAllocator;
     friend class GPerf;
+    friend class MemoryManager;
 };
 
 using GPipelinePtr = GPipeline *;
