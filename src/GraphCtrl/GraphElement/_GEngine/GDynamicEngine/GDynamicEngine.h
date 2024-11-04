@@ -23,8 +23,6 @@ protected:
 
     CStatus run() override;
 
-    CStatus afterRunCheck() override;
-
     /**
      * 记录当前 elements 数据信息
      * @param elements
@@ -43,14 +41,7 @@ protected:
      * @param
      * @return
     */
-    CVoid asyncRunAndWait();
-
-    /**
-     * 动态图运行前重置
-     * @param
-     * @return
-    */
-    CVoid beforeRun();
+    CVoid commonRunAll();
 
     /**
      * element 运行element
@@ -96,6 +87,7 @@ private:
 
     std::mutex lock_;
     std::condition_variable cv_;
+    std::mutex status_lock_;
 
     friend class UAllocator;
 };

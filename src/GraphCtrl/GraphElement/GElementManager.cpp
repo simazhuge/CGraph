@@ -59,12 +59,6 @@ CStatus GElementManager::run() {
     CGRAPH_FUNCTION_BEGIN
 
     status = engine_->run();    // 通过引擎来执行全部的逻辑
-    CGRAPH_FUNCTION_CHECK_STATUS
-
-    if (auto_check_enable_) {
-        // 默认是需要check一下执行结果的。如果为了增加一点效率，也可以通过外部设置不检查
-        status = engine_->afterRunCheck();
-    }
     CGRAPH_FUNCTION_END
 }
 
@@ -106,17 +100,6 @@ CStatus GElementManager::clear() {
 }
 
 
-GElementManagerPtr GElementManager::setScheduleStrategy(int strategy) {
-    CGRAPH_ASSERT_NOT_NULL_THROW_ERROR(engine_)
-    /**
-     * 如果是 region中的 GElementManager，需要在init完成后，进行这一步赋值
-     * 否则会因为 engine_ 为空，而导致崩溃
-     */
-    engine_->schedule_strategy_ = strategy;
-    return this;
-}
-
-
 GElementManagerPtr GElementManager::setEngineType(GEngineType engineType) {
     engine_type_ = engineType;
     return this;
@@ -130,6 +113,7 @@ CStatus GElementManager::initEngine() {
     switch (engine_type_) {
         case GEngineType::DYNAMIC : engine_ = CGRAPH_SAFE_MALLOC_COBJECT(GDynamicEngine) break;
         case GEngineType::TOPO: engine_ = CGRAPH_SAFE_MALLOC_COBJECT(GTopoEngine) break;
+        case GEngineType::STATIC: engine_ = CGRAPH_SAFE_MALLOC_COBJECT(GStaticEngine) break;
         default: CGRAPH_RETURN_ERROR_STATUS("unknown engine type")
     }
 
@@ -183,6 +167,11 @@ CBool GElementManager::checkSerializable() {
     }
 
     return (1 == frontSize) && (1 == tailSize);
+}
+
+
+CSize GElementManager::trim() {
+    return GTrimOptimizer::trim(manager_elements_);
 }
 
 

@@ -9,6 +9,9 @@
 #ifndef CGRAPH_GENGINE_H
 #define CGRAPH_GENGINE_H
 
+#include <vector>
+#include <queue>
+
 #include "GEngineDefine.h"
 #include "../GElementObject.h"
 #include "../GElementSorter.h"
@@ -27,28 +30,6 @@ protected:
     virtual CStatus setup(const GSortedGElementPtrSet& elements) = 0;
 
     /**
-     * 执行完毕后，确认运行是否正常
-     * @return
-     */
-    virtual CStatus afterRunCheck() = 0;
-
-    /**
-     * 计算出来最终计算的index值
-     * @param element
-     * @return
-     */
-    inline CIndex calcIndex(GElementPtr element) const {
-        /**
-         * 如果没有设定绑定线程的话，就用默认调度策略
-         * 否则的话，会走绑定的thread。
-         * 如果设定的 binding_index_ >= thread 总数，会在 threadpool 层做统一判定
-         */
-        auto bindingIndex = element->getBindingIndex();
-        return CGRAPH_DEFAULT_BINDING_INDEX == bindingIndex
-               ? schedule_strategy_ : bindingIndex;
-    }
-
-    /**
      * 分析所有的可以设置 linkable 的数据
      * @param elements
      * @return
@@ -56,28 +37,68 @@ protected:
     CVoid link(const GSortedGElementPtrSet& elements) {
         /**
          * 认定图可以连通的判定条件：
-         * 1，当前元素仅有一个依赖
-         * 2，当前元素依赖的节点，只有一个后继
-         * 3，当前元素的依赖的后继，仍是当前节点
-         * 4，前后元素绑定机制是一样的
+         * 1，当前元素仅有一个后继
+         * 2，当前元素的唯一后继，仅有一个前驱
+         * 3，前后元素绑定机制是一样的
          */
         linked_size_ = 0;
         for (GElementPtr element : elements) {
-            element->linkable_ = false;    // 防止出现之前的留存逻辑。确保只有当前链接关系下，需要设置 linkable的，才会设置为 true
-            if (1 == element->dependence_.size()
-                && 1 == (*element->dependence_.begin())->run_before_.size()
-                && (*(element->dependence_.begin()))->run_before_.find(element) != (*(element->dependence_.begin()))->run_before_.end()
-                && element->getBindingIndex() == (*(element->dependence_.begin()))->getBindingIndex()) {
-                element->linkable_ = true;
+            element->shape_ = internal::GElementShape::NORMAL;
+            if (1 == element->run_before_.size()
+                && 1 == (*element->run_before_.begin())->dependence_.size()
+                && element->binding_index_ == (*(element->run_before_.begin()))->binding_index_) {
+                element->shape_ = internal::GElementShape::LINKABLE;
                 linked_size_++;
             }
         }
     }
 
+    /**
+     * 计算当前elements的 拓扑排序信息
+     * @param elements
+     * @return
+     */
+    static GElementPtrArr getTopo(const GSortedGElementPtrSet& elements) {
+        GElementPtrArr result;
+        std::queue<GElementPtr> readyQueue;
+        for (auto* element : elements) {
+            element->left_depend_ = element->dependence_.size();
+            if (0 == element->left_depend_) {
+                readyQueue.push(element);
+            }
+        }
+
+        while(!readyQueue.empty()) {
+            auto* cur = readyQueue.front();
+            readyQueue.pop();
+            result.push_back(cur);
+
+            for (auto* element : cur->run_before_) {
+                if (0 == --element->left_depend_) {
+                    readyQueue.push(element);
+                }
+            }
+        }
+
+        for (auto element : elements) {
+            // 计算技术之后，需要恢复一下 depend的信息，以免引入误差
+            element->left_depend_ = element->dependence_.size();
+        }
+        return result;
+    }
+
+    /**
+    * 判断是否是dag的逻辑
+    * @param elements
+    * @return
+    */
+    static CBool isDag(const GSortedGElementPtrSet& elements) {
+        const auto& result = getTopo(elements);
+        return result.size() == elements.size();
+    }
 
 protected:
     UThreadPoolPtr thread_pool_ { nullptr };                    // 内部执行的线程池
-    int schedule_strategy_ = CGRAPH_DEFAULT_TASK_STRATEGY;      // 调度策略
     CSize linked_size_ = 0;                                     // 标记有多少个element，是 linkable 的数据
 
     friend class GElementManager;

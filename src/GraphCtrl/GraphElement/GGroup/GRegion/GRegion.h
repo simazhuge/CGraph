@@ -24,6 +24,12 @@ public:
      */
     GRegion* setGEngineType(GEngineType type);
 
+    /**
+     * 修剪冗余的连边信息
+     * @return
+     */
+    CSize trim();
+
 protected:
     explicit GRegion();
     ~GRegion() override;
@@ -51,6 +57,7 @@ private:
 
     friend class GPipeline;
     friend class UAllocator;
+    friend class GTrimOptimizer;
 };
 
 using GRegionPtr = GRegion *;

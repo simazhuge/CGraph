@@ -53,13 +53,6 @@ protected:
     CStatus clear() final;
 
     /**
-     * 设置调度策略
-     * @param type
-     * @return
-     */
-    GElementManager* setScheduleStrategy(int strategy);
-
-    /**
      * 设置图引擎运行模式
      * @param engineType
      * @return
@@ -93,6 +86,12 @@ protected:
     CBool checkSerializable();
 
     /**
+     * 剪裁多余的连边信息
+     * @return
+     */
+    CSize trim();
+
+    /**
      * 加入数据，并且执行
      * @param elements
      * @return
@@ -104,7 +103,6 @@ private:
     GEnginePtr engine_ { nullptr };                             // 执行引擎
     GEngineType engine_type_ { GEngineType::DYNAMIC };          // 引擎执行方式
     UThreadPoolPtr thread_pool_ { nullptr };                    // 线程池
-    CBool auto_check_enable_ = true;                            // 是否自动实现后校验逻辑
 
     friend class GPipeline;
     friend class GRegion;

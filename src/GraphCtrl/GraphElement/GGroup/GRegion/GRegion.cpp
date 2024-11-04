@@ -6,10 +6,7 @@
 @Desc: 
 ***************************/
 
-#include <functional>
-
 #include "GRegion.h"
-// #include "GraphCtrl/GraphElement/_GOptimizer/GOptimizerInclude.h"
 #include "../../_GOptimizer/GOptimizerInclude.h"
 CGRAPH_NAMESPACE_BEGIN
 
@@ -35,8 +32,6 @@ CStatus GRegion::init() {
     this->manager_->setThreadPool(thread_pool_);
     status = this->manager_->init();
     CGRAPH_FUNCTION_CHECK_STATUS
-    // 设置调度类型，需要在引擎初始化完成之后
-    this->manager_->setScheduleStrategy(CGRAPH_POOL_TASK_STRATEGY);
 
     is_init_ = true;
     CGRAPH_FUNCTION_END
@@ -127,6 +122,16 @@ CStatus GRegion::addManagers(GParamManagerPtr paramManager,
 
 CBool GRegion::isSeparate(GElementCPtr a, GElementCPtr b) const {
     return GSeparateOptimizer::checkSeparate(manager_->manager_elements_, a, b);
+}
+
+
+CSize GRegion::trim() {
+    CGRAPH_ASSERT_INIT_THROW_ERROR(false)
+    CSize result = 0;
+    if (manager_) {
+        result = GTrimOptimizer::trim(manager_->manager_elements_);
+    }
+    return result;
 }
 
 CGRAPH_NAMESPACE_END

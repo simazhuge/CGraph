@@ -60,7 +60,7 @@ protected:
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(true)
 
-        status = loopProcess();
+        loopProcess();
         CGRAPH_FUNCTION_END
     }
 
@@ -95,7 +95,7 @@ protected:
     CVoid waitRunTask(CMSec ms) {
         auto task = this->pool_task_queue_->popWithTimeout(ms);
         if (nullptr != task) {
-            (*task)();
+            runTask(*task);
         }
     }
 

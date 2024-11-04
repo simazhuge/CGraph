@@ -73,6 +73,19 @@ auto UThreadPool::commitWithPriority(const FunctionType& task, int priority)
     return result;
 }
 
+
+template<typename FunctionType>
+CVoid UThreadPool::execute(const FunctionType& task, CIndex index) {
+    CIndex realIndex = dispatch(index);
+    if (realIndex >= 0 && realIndex < config_.default_thread_size_) {
+        primary_threads_[realIndex]->pushTask(std::move(task));
+    } else if (CGRAPH_LONG_TIME_TASK_STRATEGY == realIndex) {
+        priority_task_queue_.push(std::move(task), CGRAPH_LONG_TIME_TASK_STRATEGY);
+    } else {
+        task_queue_.push(std::move(task));
+    }
+}
+
 CGRAPH_NAMESPACE_END
 
 #endif    // CGRAPH_UTHREADPOOL_INL

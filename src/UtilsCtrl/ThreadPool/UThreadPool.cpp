@@ -93,6 +93,7 @@ CStatus UThreadPool::submit(const UTaskGroup& taskGroup, CMSec ttl) {
     CGRAPH_ASSERT_INIT(true)
 
     std::vector<std::future<CVoid>> futures;
+    futures.reserve(taskGroup.getSize());
     for (const auto& task : taskGroup.task_arr_) {
         futures.emplace_back(commit(task));
     }
@@ -105,9 +106,9 @@ CStatus UThreadPool::submit(const UTaskGroup& taskGroup, CMSec ttl) {
         const auto& futStatus = fut.wait_until(deadline);
         switch (futStatus) {
             case std::future_status::ready: break;    // 正常情况，直接返回了
-            case std::future_status::timeout: status += CErrStatus("thread status timeout"); break;
-            case std::future_status::deferred: status += CErrStatus("thread status deferred"); break;
-            default: status += CErrStatus("thread status unknown");
+            case std::future_status::timeout: status += CStatus("thread status timeout"); break;
+            case std::future_status::deferred: status += CStatus("thread status deferred"); break;
+            default: status += CStatus("thread status unknown");
         }
     }
 
@@ -159,6 +160,7 @@ CStatus UThreadPool::destroy() {
         CGRAPH_DELETE_PTR(pt)
     }
     primary_threads_.clear();
+
     // secondary 线程是智能指针，不需要delete
     for (auto &st : secondary_threads_) {
         status += st->destroy();
@@ -203,12 +205,8 @@ CStatus UThreadPool::releaseSecondaryThread(CInt size) {
 CIndex UThreadPool::dispatch(CIndex origIndex) {
     CIndex realIndex = 0;
     if (CGRAPH_DEFAULT_TASK_STRATEGY == origIndex) {
-        /**
-         * 如果是默认策略信息，在[0, default_thread_size_) 之间的，通过 thread 中queue来调度
-         * 在[default_thread_size_, max_thread_size_) 之间的，通过 pool 中的queue来调度
-         */
         realIndex = cur_index_++;
-        if (cur_index_ >= config_.max_thread_size_ || cur_index_ < 0) {
+        if (cur_index_ >= config_.default_thread_size_ || cur_index_ < 0) {
             cur_index_ = 0;
         }
     } else {
@@ -251,7 +249,7 @@ CVoid UThreadPool::monitor() {
 
         // 如果 primary线程都在执行，则表示忙碌
         bool busy = !primary_threads_.empty() && std::all_of(primary_threads_.begin(), primary_threads_.end(),
-                                [](UThreadPrimaryPtr ptr) { return nullptr != ptr && ptr->is_running_; });
+                                [](UThreadPrimaryPtr ptr) { return ptr && ptr->is_running_; });
 
         CGRAPH_LOCK_GUARD lock(st_mutex_);
         // 如果忙碌或者priority_task_queue_中有任务，则需要添加 secondary线程

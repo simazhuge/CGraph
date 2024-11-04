@@ -72,7 +72,11 @@ public:
      * @param name
      * @return
      */
+#ifdef _WIN32
+    CVoidPtr setName(const std::string& name) override;
+#else
     GElement* setName(const std::string& name) override;
+#endif
 
     /**
      * 设置循环次数
@@ -114,16 +118,54 @@ public:
                          GElementTimeoutStrategy strategy = GElementTimeoutStrategy::AS_ERROR);
 
     /**
+     * 设置为微任务
+     * @param macro
+     * @return
+     */
+    GElement* setMacro(CBool macro);
+
+    /**
      * 当前element是否是一个 group逻辑
      * @return
      */
-    CBool isGroup() const;
+    CBool isGGroup() const;
+
+    /**
+     * 当前element是否是一个 adaptor逻辑
+     * @return
+     */
+    CBool isGAdaptor() const;
+
+    /**
+     * 当前element是否是一个 node逻辑
+     * @return
+     */
+    CBool isGNode() const;
 
     /**
      * 获取当前节点状态信息
      * @return
      */
     GElementState getCurState() const;
+
+    /**
+     * 删除一个依赖的节点信息
+     * @param element
+     * @return
+     * @notice 删除依赖关系之后，可能会出现 dag 无法连通的情况
+     */
+    CStatus removeDepend(GElement* element);
+
+    /**
+     * 获取对应的ptr类型
+     * @tparam T
+     * @param ptr
+     * @param allowEmpty
+     * @return
+     */
+    template<typename T,
+            c_enable_if_t<std::is_base_of<GElement, T>::value, int> = 0>
+    T* getPtr(CBool allowEmpty = true);
 
     /**
      * 实现连续注册的语法糖，形如：
@@ -181,9 +223,8 @@ protected:
      * 崩溃流程处理
      * @param ex
      * @return
-     * @notice 可以自行覆写crashed方法，但不推荐。如果需要复写的话，返回值需要填写 STATUS_CRASH，否则可能出现执行异常
      */
-    virtual CStatus crashed(const CException& ex);
+    CStatus crashed(const CException& ex);
 
     /**
      * 获取当前element内部参数
@@ -234,12 +275,6 @@ private:
     CVoid beforeRun();
 
     /**
-     * 判定node是否可以和前面节点一起执行
-     * @return
-     */
-    CBool isLinkable() const;
-
-    /**
      * 判定当前的内容，是否需要异步执行
      * @return
      */
@@ -250,6 +285,12 @@ private:
      * @return
      */
     CBool isMutable() const;
+
+    /**
+     * 判断当前是否是微节点
+     * @return
+     */
+    CBool isMacro() const;
 
     /**
      * 判断当前element是否已经被注册到特定pipeline中了。避免反复注册的问题
@@ -263,17 +304,17 @@ private:
      * @param curStatus
      * @return
      */
-    CStatus doAspect(const GAspectType& aspectType,
+    CStatus doAspect(const internal::GAspectType& aspectType,
                      const CStatus& curStatus = CStatus());
 
     /**
      * 设置element信息
-     * @param dependElements
+     * @param depends
      * @param name
      * @param loop
      * @return
      */
-    virtual CStatus addElementInfo(const std::set<GElement *>& dependElements,
+    virtual CStatus addElementInfo(const std::set<GElement *>& depends,
                                    const std::string& name, CSize loop);
 
     /**
@@ -341,7 +382,7 @@ private:
      * 判断是否进入 yield状态。如果是的话，则等待恢复。未进入yield状态，则继续运行
      * @return
      */
-    inline CVoid checkYield();
+    CVoid checkYield();
 
     /**
      * 判断当前元素，是否可以线性执行。默认返回true
@@ -380,14 +421,20 @@ private:
      */
     std::vector<GElement *> getDeepPath(CBool reverse) const;
 
+    /**
+     * 判断是否是默认绑定策略
+     * @return
+     */
+    CBool isDefaultBinding() const;
+
 private:
     /** 状态相关信息 */
     CBool done_ { false };                                                    // 判定被执行结束
-    CBool linkable_ { false };                                                // 判定是否可以连通计算
     CBool visible_ { true };                                                  // 判定可见的，如果被删除的话，则认为是不可见的
     CBool is_init_ { false };                                                 // 判断是否init
     GElementType element_type_ { GElementType::ELEMENT };                     // 用于区分element 内部类型
     std::atomic<GElementState> cur_state_ { GElementState::CREATE };       // 当前执行状态
+    internal::GElementShape shape_ { internal::GElementShape::NORMAL };       // 元素位置类型
 
     /** 配置相关信息 */
     CSize loop_ { CGRAPH_DEFAULT_LOOP_TIMES };                                // 元素执行次数
@@ -395,6 +442,7 @@ private:
     CIndex binding_index_ { CGRAPH_DEFAULT_BINDING_INDEX };                   // 用于设定绑定线程id
     CMSec timeout_ { CGRAPH_DEFAULT_ELEMENT_TIMEOUT };                        // 超时时间信息（0表示不计算超时）
     GElementTimeoutStrategy timeout_strategy_ { GElementTimeoutStrategy::AS_ERROR };    // 判定超时的情况下，是否返回错误
+    CBool is_marco_ { false };                                                // 微任务
 
     /** 执行期间相关信息 */
     GElementParamMap local_params_;                                           // 用于记录当前element的内部参数
@@ -404,9 +452,9 @@ private:
     CBool is_prepared_ { false };                                             // 判断是否已经执行过 prepareRun() 方法
 
     /** 图相关信息 */
-    std::atomic<CSize> left_depend_ { 0 };                                 // 当 left_depend_ 值为0的时候，即可以执行该element信息
-    std::set<GElement *> run_before_;                                         // 被依赖的节点（后继）
-    std::set<GElement *> dependence_;                                         // 依赖的节点信息（前驱）
+    std::atomic<CSize> left_depend_ { 0 };                                    // 当 left_depend_ 值为0的时候，即可以执行该element信息
+    USmallVector<GElement *> run_before_;                                     // 被依赖的节点（后继）
+    USmallVector<GElement *> dependence_;                                     // 依赖的节点信息（前驱）
     GElement* belong_ { nullptr };                                            // 从属的element 信息，如为nullptr，则表示从属于 pipeline
 
     /** 异步执行相关信息 */
@@ -433,9 +481,11 @@ private:
     friend class GEngine;
     friend class GDynamicEngine;
     friend class GTopoEngine;
+    friend class GStaticEngine;
     friend class GAspectObject;
     friend class GOptimizer;
     friend class GMaxParaOptimizer;
+    friend class GTrimOptimizer;
     friend class GSeparateOptimizer;
     friend class GElementRepository;
     friend class GPerf;
@@ -449,6 +499,7 @@ using GElementPtr = GElement *;
 using GElementCPtr = const GElement *;
 using GElementPPtr = GElementPtr *;
 using GElementPtrArr = std::vector<GElementPtr>;
+using GElementPtrMat2D = std::vector<GElementPtrArr>;
 using GElementPtrSet = std::set<GElementPtr>;
 
 CGRAPH_NAMESPACE_END

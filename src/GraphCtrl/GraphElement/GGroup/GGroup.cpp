@@ -72,6 +72,7 @@ CVoid GGroup::dumpGroupLabelBegin(std::ostream& oss) {
 
 
 CVoid GGroup::dumpGroupLabelEnd(std::ostream& oss) {
+    (void)(this);
     oss << "}\n";
 }
 

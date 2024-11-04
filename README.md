@@ -3,6 +3,7 @@
   <a href="https://github.com/ChunelFeng/CGraph"><img src="https://badgen.net/badge/os/MacOS,Linux,Windows/cyan?list=1" alt="os"></a>
   <a href="https://github.com/ChunelFeng/CGraph/stargazers"><img src="https://badgen.net/github/stars/ChunelFeng/CGraph?color=cyan" alt="stars"></a>
   <a href="https://github.com/ChunelFeng/CGraph/network/members"><img src="https://badgen.net/github/forks/ChunelFeng/CGraph?color=cyan" alt="forks"></a>
+  <a href="https://www.codefactor.io/repository/github/chunelfeng/cgraph/overview/main"><img src="https://www.codefactor.io/repository/github/chunelfeng/cgraph/badge/main" alt="CodeFactor" /></a>
 </p>
 
 [![awesome-cpp](https://badgen.net/badge/icon/awesome-cpp/purple?icon=awesome&label&color)](https://github.com/fffaraz/awesome-cpp)
@@ -23,9 +24,9 @@
 
 ## 一. 简介
 
-`CGraph`中文名为【色丶图】，是一套无任何第三方依赖的跨平台图流程执行框架。通过`GPipeline`(流水线)底层调度，实现了依赖元素依次顺序执行、非依赖元素并发执行的调度功能。
+`CGraph`中文名为【色丶图】，是一套无任何第三方依赖的跨平台图流程执行框架。通过`GPipeline`(流水线)底层调度，提供了包含依赖元素依次执行、非依赖元素并发执行在 eDAG 调度功能。
 
-使用者只需继承`GNode`(节点)类，实现子类的run()方法，并根据需要设定依赖关系，即可实现任务的图化执行或流水线执行。还可以通过设定各种包含多节点信息的`GGroup`(组)，自行控制图的条件判断、循环和并发执行逻辑。
+使用者只需继承`GNode`(节点)类，实现子类的`run()`方法，并根据需要设定依赖关系，即可实现任务的图化执行或流水线执行。还可以通过设定各种包含多节点信息的`GGroup`(组)，自行控制图的条件判断、循环和并发执行逻辑。
 
 项目提供了丰富的`Param`(参数)类型，用于不同应用场景下的数据互通。此外，还可以通过添加`GAspect`(切面)的方式，实现以上各种元素功能的横向扩展；通过引入`GAdapter`(适配器)对单个节点功能进行加强；或者通过添加`GEvent`(信号)，丰富和优化执行逻辑。
 
@@ -34,9 +35,13 @@
 
 本工程使用纯C++11标准库编写，无任何第三方依赖。兼容`MacOS`、`Linux`、`Windows`和`Android`系统，支持通过 `CLion`、`VSCode`、`Xcode`、`Visual Studio`、`Code::Blocks`、`Qt Creator`等多款IDE进行本地编译和二次开发，具体编译方式请参考 [CGraph 编译说明](https://github.com/ChunelFeng/CGraph/blob/main/COMPILE.md ) <br>
 
-详细功能介绍和用法，请参考 **推荐阅读** 中的文章内容。项目相关视频在B站持续更新中，欢迎观看交流和一键三连：<br>
+详细功能介绍和用法，请参考 [一面之猿网](http://www.chunel.cn/) 中的文章内容。相关视频在B站持续更新中，欢迎观看和交流：<br>
 * [【B站视频】CGraph 入门篇](https://www.bilibili.com/video/BV1mk4y1v7XJ) <br>
-* [【B站视频】CGraph 功能篇 (buy me a cup of coffee?)](https://www.bilibili.com/cheese/play/ss22264) <br>
+* [【B站视频】CGraph 功能篇](https://www.bilibili.com/cheese/play/ss22264) <br>
+  * 全面介绍CGraph项目中，所有的名词术语和功能模块
+  * 结合实际coding过程，详细介绍了每个功能的具体的使用场景、用法、以及解决的问题
+  * 适合想要全面了解功能和快速上手使用CGraph的童鞋
+  * 适合对多线程编程感兴趣的童鞋
 * [【B站视频】CGraph 应用篇](https://www.bilibili.com/video/BV1B84y1D7Hs) <br>
 * [【B站视频】CGraph 分享篇](https://www.bilibili.com/video/BV1dh4y1i78u) <br>
 
@@ -49,7 +54,7 @@
 class MyNode1 : public CGraph::GNode {
 public:
     CStatus run() override {
-        printf("[%s], Sleep for 1 second ...\n", this->getName().c_str());
+        printf("[%s], sleep for 1 second ...\n", this->getName().c_str());
         CGRAPH_SLEEP_SECOND(1)
         return CStatus();
     }
@@ -58,7 +63,7 @@ public:
 class MyNode2 : public CGraph::GNode {
 public:
     CStatus run() override {
-        printf("[%s], Sleep for 2 second ...\n", this->getName().c_str());
+        printf("[%s], sleep for 2 second ...\n", this->getName().c_str());
         CGRAPH_SLEEP_SECOND(2)
         return CStatus();
     }
@@ -121,17 +126,27 @@ int main() {
 * [以图优图：CGraph中计算dag最大并发度思路总结](http://www.chunel.cn/archives/cgraph-max-para-size)
 * [一文带你了解练习时长两年半的CGraph](http://www.chunel.cn/archives/cgraph-kunanniversary-introduce)
 * [CGraph作者想知道，您是否需要一款eDAG调度框架](http://www.chunel.cn/archives/cgraph-extended-dag)  
+* [降边增效：CGraph中冗余边剪裁思路总结](http://www.chunel.cn/archives/cgraph-remove-redundancy-link)
 <br>
 
 ## 四. 关联项目
 
 * [GraphANNS](https://github.com/whenever5225/GraphANNS) : Graph-based Approximate Nearest Neighbor Search Working off CGraph
 * [CThreadPool](https://github.com/ChunelFeng/CThreadPool) : 一个简单好用、功能强大、性能优异、跨平台的C++线程池
-* [taskflow](https://github.com/taskflow/taskflow) : A General-purpose Parallel and Heterogeneous Task Programming System
+* [CGraph-lite](https://github.com/ChunelFeng/CGraph-lite) : head-only, simplest CGraph, with DAG executor and param translate function
 * [awesome-cpp](https://github.com/fffaraz/awesome-cpp) : A curated list of awesome C++ (or C) frameworks, libraries, resources, and shiny things. Inspired by awesome-... stuff.
 * [awesome-workflow-engines](https://github.com/meirwah/awesome-workflow-engines) : A curated list of awesome open source workflow engines
+* [taskflow](https://github.com/taskflow/taskflow) : A General-purpose Parallel and Heterogeneous Task Programming System
+  * [【B站视频】CGraph 和 taskflow 性能对比实测](https://www.bilibili.com/video/BV1gwWAekEAy/?spm_id_from=333.337.search-card.all.click&vd_source=2c7baed805c6cb33d630d5d4546cf0be) <br>
+* [torchpipe](https://github.com/torchpipe/torchpipe) : Serving Inside Pytorch
+  * [【B站视频】开源项目torchpipe - ai引擎在线高并发经验和实战](https://www.bilibili.com/video/BV1Zm411X7k1/)
 * [nndeploy](https://github.com/DeployAI/nndeploy) : nndeploy是一款模型端到端部署框架。以多端推理以及基于有向无环图模型部署为内核，致力为用户提供跨平台、简单易用、高性能的模型部署体验。
+  * [【B站视频】nndeploy--AI模型端到端部署框架(1)](https://www.bilibili.com/video/BV1VA4m1A7Bk)
+  * [【B站视频】nndeploy--AI模型端到端部署框架(2)](https://www.bilibili.com/video/BV1PK421v775)
 * [KuiperInfer](https://github.com/zjhellofss/KuiperInfer) : 带你从零实现一个高性能的深度学习推理库，支持大模型 llama2 、Unet、Yolov5、Resnet等模型的推理。Implement a high-performance deep learning inference library step by step
+  * [【B站视频】KuiperInfer推理框架 - 一个面向教学的推理框架](https://www.bilibili.com/video/BV1t2421K7HN)
+* [OGraph](https://github.com/symphony09/ograph) : A simple way to build a pipeline with Go.
+  * [【B站视频】听阿里云大佬分享：OGraph——基于Go的流图调度二三事](https://www.bilibili.com/video/BV19RHce6Evo)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=ChunelFeng/CGraph&type=Date)](https://star-history.com/#ChunelFeng/CGraph&Date)
 
@@ -317,6 +332,18 @@ int main() {
 * 提供判定`element`之间是否有依赖关系的方法
 * 提供bazel编译方式
 * 优化perf功能
+
+[2024.09.17 - v2.6.1 - Chunel]
+* 提供`pipeline`的静态执行的方式，提供基于静态执行的微任务机制
+* 提供`pipeline`剪裁功能，用于删除`element`之间重复的依赖
+* 提供`element`删除依赖的方法
+* 优化`event`(事件)机制，异步事件可以等待结束
+* 发布 [CGraph-lite](https://github.com/ChunelFeng/CGraph-lite) 项目，提供简单DAG构图和参数传递功能。接口完全兼容，可无缝切换至本项目
+
+[2024.10.27 - v2.6.2 - Chunel]
+* 优化参数互斥机制
+* 修复辅助线程异常等待问题，修改辅助线程使用场景
+* 更新`tutorial`内容
 
 </details>
 

@@ -2,7 +2,7 @@
 set_project("CGraph")
 
 -- set project version
-set_version("2.6.0")
+set_version("2.6.1")
 
 -- set language: c++11
 set_languages("c++11")
@@ -42,7 +42,8 @@ tutorial_list = {
         "T23-Some",
         "T24-Fence",
         "T25-Coordinator",
-        "T26-Mutable"
+        "T26-Mutable",
+        "T27-Trim",
 }
 
 -- add tutorial target one by one

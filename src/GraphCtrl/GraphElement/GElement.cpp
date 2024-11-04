@@ -28,7 +28,11 @@ CVoid GElement::beforeRun() {
 }
 
 
+    #ifdef _WIN32
+CVoidPtr GElement::setName(const std::string& name) {
+    #else
 GElementPtr GElement::setName(const std::string& name) {
+    #endif
     CGRAPH_ASSERT_INIT_THROW_ERROR(false)
     this->name_ = name.empty() ? this->session_ : name;
     return this;
@@ -86,6 +90,16 @@ GElementPtr GElement::setTimeout(CMSec timeout, GElementTimeoutStrategy strategy
 }
 
 
+GElementPtr GElement::setMacro(CBool macro) {
+    CGRAPH_ASSERT_INIT_THROW_ERROR(false)
+
+    // 目前仅针对非group逻辑生效
+    CGRAPH_THROW_EXCEPTION_BY_CONDITION(isGGroup(), "cannot set group as macro")
+    is_marco_ = macro;
+    return this;
+}
+
+
 GElementRef GElement::operator--(int) noexcept {
     try {
         this->setVisible(true);
@@ -126,11 +140,6 @@ GElement& GElement::operator*(CSize loop) noexcept {
 }
 
 
-CBool GElement::isLinkable() const {
-    return this->linkable_;
-}
-
-
 CBool GElement::isAsync() const {
     // 如果timeout != 0, 则异步执行
     return this->timeout_ != CGRAPH_DEFAULT_ELEMENT_TIMEOUT;
@@ -166,16 +175,17 @@ CStatus GElement::addDependGElements(const GElementPtrSet& elements) {
 }
 
 
-CStatus GElement::addElementInfo(const GElementPtrSet& dependElements,
+CStatus GElement::addElementInfo(const GElementPtrSet& depends,
                                  const std::string& name, CSize loop) {
     CGRAPH_FUNCTION_BEGIN
-    CGRAPH_ASSERT_INIT_THROW_ERROR(false)
+    CGRAPH_ASSERT_INIT(false)
 
     // 添加依赖的时候，可能会出现异常情况。故在这里提前添加 && 做判定
-    status = this->addDependGElements(dependElements);
+    status = this->addDependGElements(depends);
     CGRAPH_FUNCTION_CHECK_STATUS
 
-    this->setName(name)->setLoop(loop);
+    this->setLoop(loop);
+    this->setName(name);
     CGRAPH_FUNCTION_END
 }
 
@@ -196,7 +206,7 @@ CStatus GElement::addManagers(GParamManagerPtr paramManager, GEventManagerPtr ev
 }
 
 
-CStatus GElement::doAspect(const GAspectType& aspectType, const CStatus& curStatus) {
+CStatus GElement::doAspect(const internal::GAspectType& aspectType, const CStatus& curStatus) {
     CGRAPH_FUNCTION_BEGIN
 
     // 如果切面管理类为空，或者未添加切面，直接返回
@@ -232,7 +242,7 @@ CStatus GElement::fatProcessor(const CFunctionType& type) {
 
                 for (CSize i = 0; i < this->loop_ && status.isOK() && GElementState::NORMAL == this->getCurState(); i++) {
                     /** 执行带切面的run方法 */
-                    status += doAspect(GAspectType::BEGIN_RUN);
+                    status += doAspect(internal::GAspectType::BEGIN_RUN);
                     CGRAPH_FUNCTION_CHECK_STATUS
                     do {
                         status += isAsync() ? asyncRun() : run();
@@ -243,7 +253,7 @@ CStatus GElement::fatProcessor(const CFunctionType& type) {
                          * 可以根据需求，对任意element类型，添加特定的isHold条件
                          * */
                     } while (checkYield(), this->isHold() && status.isOK());
-                    doAspect(GAspectType::FINISH_RUN, status);
+                    doAspect(internal::GAspectType::FINISH_RUN, status);
                 }
 
                 CGRAPH_THROW_EXCEPTION_BY_STATUS(checkRunResult())
@@ -252,24 +262,24 @@ CStatus GElement::fatProcessor(const CFunctionType& type) {
             case CFunctionType::INIT: {
                 concerned_params_.clear();    // 仅需要记录这一轮使用到的 GParam 信息
                 is_prepared_ = false;
-                status = doAspect(GAspectType::BEGIN_INIT);
+                status = doAspect(internal::GAspectType::BEGIN_INIT);
                 CGRAPH_FUNCTION_CHECK_STATUS
                 status = init();
-                doAspect(GAspectType::FINISH_INIT, status);
+                doAspect(internal::GAspectType::FINISH_INIT, status);
                 break;
             }
             case CFunctionType::DESTROY: {
-                status = doAspect(GAspectType::BEGIN_DESTROY);
+                status = doAspect(internal::GAspectType::BEGIN_DESTROY);
                 CGRAPH_FUNCTION_CHECK_STATUS
                 status = destroy();
-                doAspect(GAspectType::FINISH_DESTROY, status);
+                doAspect(internal::GAspectType::FINISH_DESTROY, status);
                 break;
             }
             default:
                 CGRAPH_RETURN_ERROR_STATUS("get function type error")
         }
     } catch (const CException& ex) {
-        doAspect(GAspectType::ENTER_CRASHED);
+        doAspect(internal::GAspectType::ENTER_CRASHED);
         status = crashed(ex);
     }
 
@@ -328,14 +338,20 @@ CBool GElement::isMutable() const {
 }
 
 
+CBool GElement::isMacro() const {
+    return is_marco_;
+}
+
+
 CStatus GElement::crashed(const CException& ex) {
-    return CStatus(internal::STATUS_CRASH, ex.what(), CGRAPH_GET_LOCATE);
+    (void)(this);
+    return CStatus(internal::STATUS_CRASH, ex.what());
 }
 
 
 CIndex GElement::getThreadIndex() {
     CGRAPH_THROW_EXCEPTION_BY_CONDITION((nullptr == thread_pool_),    \
-        this->getName() + " getThreadIndex with no threadpool")    // 理论不可能出现的情况
+        this->getName() + " getThreadIndex with no thread pool")    // 理论不可能出现的情况
 
     auto tid = (CSize)std::hash<std::thread::id>{}(std::this_thread::get_id());
     return thread_pool_->getThreadIndex(tid);
@@ -360,12 +376,13 @@ CVoid GElement::dump(std::ostream& oss) {
 
 
 CVoid GElement::dumpEdge(std::ostream& oss, GElementPtr src, GElementPtr dst, const std::string& label) {
-    if (src->isGroup() && dst->isGroup()) {
+    (void)(this);
+    if (src->isGGroup() && dst->isGGroup()) {
         // 在group的逻辑中，添加 cluster_ 的信息
         oss << 'p' << src << " -> p" << dst << label << "[ltail=cluster_p" << src << " lhead=cluster_p" << dst << "]";
-    } else if (src->isGroup() && !dst->isGroup()) {
+    } else if (src->isGGroup() && !dst->isGGroup()) {
         oss << 'p' << src << " -> p" << dst << label << "[ltail=cluster_p" << src << "]";
-    } else if (!src->isGroup() && dst->isGroup()) {
+    } else if (!src->isGGroup() && dst->isGGroup()) {
         oss << 'p' << src << " -> p" << dst << label << "[lhead=cluster_p" << dst << "]";
     } else {
         oss << 'p' << src << " -> p" << dst << label;
@@ -384,7 +401,7 @@ CVoid GElement::dumpElement(std::ostream& oss) {
     dumpPerfInfo(oss);
 
     oss << "\"];\n";
-    if (this->loop_ > 1 && !this->isGroup()) {
+    if (this->loop_ > 1 && !this->isGGroup()) {
         oss << 'p' << this << " -> p" << this << "[label=\"" << this->loop_ << "\"]" << ";\n";
     }
 }
@@ -423,9 +440,19 @@ CVoid GElement::checkYield() {
 }
 
 
-CBool GElement::isGroup() const {
+CBool GElement::isGGroup() const {
     // 按位与 GROUP有值，表示是 GROUP的逻辑
     return (long(element_type_) & long(GElementType::GROUP)) > 0;
+}
+
+
+CBool GElement::isGAdaptor() const {
+    return (long(element_type_) & long(GElementType::ADAPTER)) > 0;
+}
+
+
+CBool GElement::isGNode() const {
+    return GElementType::NODE == element_type_;
 }
 
 
@@ -446,11 +473,25 @@ CIndex GElement::getBindingIndex() const {
 
 GElementRelation GElement::getRelation() const {
     GElementRelation relation;
-    relation.predecessors_ = this->dependence_;    // 前驱
-    relation.successors_ = this->run_before_;    // 后继
+    relation.predecessors_ = this->dependence_.asVector();    // 前驱
+    relation.successors_ = this->run_before_.asVector();    // 后继
     relation.belong_ = this->belong_;    // 从属信息
 
     return relation;
+}
+
+
+CStatus GElement::removeDepend(GElementPtr element) {
+    CGRAPH_FUNCTION_BEGIN
+    CGRAPH_ASSERT_NOT_NULL(element)
+    CGRAPH_ASSERT_INIT(false)
+    CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(!dependence_.hasValue(element),
+                                            element->getName() + " is not in [" + getName() + "]'s depends.")
+
+    dependence_.remove(element);
+    element->run_before_.remove(this);
+    left_depend_.store(dependence_.size(), std::memory_order_release);
+    CGRAPH_FUNCTION_END
 }
 
 
@@ -523,7 +564,7 @@ CStatus GElement::checkSuitable() {
 
 GElementPtrArr GElement::getDeepPath(CBool reverse) const {
     GElementPtrArr path;
-    auto* cur = const_cast<GElementPtr>(this);    // 这个是肯定可以转移的
+    auto* cur = const_cast<GElementPtr>(this);
     while (cur) {
         path.push_back(cur);
         cur = cur->belong_;
@@ -534,6 +575,11 @@ GElementPtrArr GElement::getDeepPath(CBool reverse) const {
         std::reverse(path.begin(), path.end());
     }
     return path;
+}
+
+
+CBool GElement::isDefaultBinding() const {
+    return CGRAPH_DEFAULT_BINDING_INDEX == binding_index_;
 }
 
 CGRAPH_NAMESPACE_END

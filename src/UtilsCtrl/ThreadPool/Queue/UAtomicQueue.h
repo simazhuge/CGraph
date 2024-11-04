@@ -138,7 +138,7 @@ public:
     CGRAPH_NO_ALLOWED_COPY(UAtomicQueue)
 
 private:
-    std::queue<std::unique_ptr<T>> queue_;
+    std::queue<std::unique_ptr<T>> queue_ {};    // 任务队列
 };
 
 CGRAPH_NAMESPACE_END

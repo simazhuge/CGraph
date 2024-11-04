@@ -68,6 +68,15 @@ T* GElement::getEParam(const std::string& key) {
     return dynamic_cast<T *>((iter != local_params_.end()) ? iter->second : nullptr);
 }
 
+
+template<typename T,
+        c_enable_if_t<std::is_base_of<GElement, T>::value, int>>
+T* GElement::getPtr(CBool allowEmpty) {
+    T* ptr = dynamic_cast<T *>(this);
+    CGRAPH_THROW_EXCEPTION_BY_CONDITION(!allowEmpty && !ptr, "change ptr type failed")
+    return ptr;
+}
+
 CGRAPH_NAMESPACE_END
 
 #endif // CGRAPH_GELEMENT_INL

@@ -6,8 +6,6 @@
 @Desc: 
 ***************************/
 
-#include <algorithm>
-
 #include "GDynamicEngine.h"
 
 CGRAPH_NAMESPACE_BEGIN
@@ -15,10 +13,13 @@ CGRAPH_NAMESPACE_BEGIN
 CStatus GDynamicEngine::setup(const GSortedGElementPtrSet& elements) {
     CGRAPH_FUNCTION_BEGIN
     /**
-     * 1. 标记数据，比如有多少个结束element等
-     * 2. 标记哪些数据，是linkable 的
-     * 3. 分析当前dag类型信息
+     * 1. 判断是否是 dag 结构
+     * 2. 标记数据，比如有多少个结束element等
+     * 3. 标记哪些数据，是linkable 的
+     * 4. 分析当前dag类型信息
      */
+    CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(!GEngine::isDag(elements),
+                                            "it is not a dag struct");
     mark(elements);
     link(elements);
     analysisDagType(elements);
@@ -28,67 +29,35 @@ CStatus GDynamicEngine::setup(const GSortedGElementPtrSet& elements) {
 
 CStatus GDynamicEngine::run() {
     CGRAPH_FUNCTION_BEGIN
+    cur_status_.reset();
 
-    switch (dag_type_) {
-        case internal::GEngineDagType::COMMON: {
-            beforeRun();
-            asyncRunAndWait();
-            break;
-        }
-        case internal::GEngineDagType::ALL_SERIAL: {
-            serialRunAll();
-            break;
-        }
-        case internal::GEngineDagType::ALL_PARALLEL: {
-            parallelRunAll();
-            break;
-        }
-        default:
-            CGRAPH_RETURN_ERROR_STATUS("unknown engine dag type")
+    if (internal::GEngineDagType::COMMON == dag_type_) {
+        commonRunAll();
+    } else if (internal::GEngineDagType::ALL_SERIAL == dag_type_) {
+        serialRunAll();
+    } else if (internal::GEngineDagType::ALL_PARALLEL == dag_type_) {
+        parallelRunAll();
+    } else {
+        CGRAPH_RETURN_ERROR_STATUS("unknown engine dag type")
     }
+
     status = cur_status_;
     CGRAPH_FUNCTION_END
 }
 
 
-CStatus GDynamicEngine::afterRunCheck() {
-    CGRAPH_FUNCTION_BEGIN
-    /**
-     * 纯串行和纯并行 是不需要做结果校验的
-     * 但是普通的dag，后期还是校验一下为好
-     * 这里也可以通过外部接口来关闭
-     */
-    if (internal::GEngineDagType::COMMON == dag_type_) {
-        for (GElementCPtr element : total_element_arr_) {
-            CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(!element->done_,    \
-                                                    element->getName() + ": dynamic engine, check not run it...")
-        }
-    }
-
-    CGRAPH_FUNCTION_END
-}
-
-
-CVoid GDynamicEngine::asyncRunAndWait() {
+CVoid GDynamicEngine::commonRunAll() {
     /**
      * 1. 执行没有任何依赖的element
      * 2. 在element执行完成之后，进行裂变，直到所有的element执行完成
      * 3. 等待异步执行结束
      */
+    finished_end_size_ = 0;
     for (const auto& element : front_element_arr_) {
         process(element, element == front_element_arr_.back());
     }
 
     fatWait();
-}
-
-
-CVoid GDynamicEngine::beforeRun() {
-    finished_end_size_ = 0;
-    cur_status_.reset();
-    for (GElementPtr element : total_element_arr_) {
-        element->beforeRun();
-    }
 }
 
 
@@ -114,7 +83,7 @@ CVoid GDynamicEngine::analysisDagType(const GSortedGElementPtrSet& elements) {
     if (total_element_arr_.empty()
        || (front_element_arr_.size() == 1 && total_element_arr_.size() - 1 == linked_size_)) {
         /**
-         * 如果所有的信息中，只有一个是非linkable。则说明只有开头的那个是的，且只有一个开头
+         * 如果所有的信息中，只有一个是非linkable。则说明只有最后的那个是的，且只有一个开头
          * 故，这里将其认定为一条 lineal 的情况
          * ps: 只有一个或者没有 element的情况，也会被算到 ALL_SERIAL 中去
          */
@@ -132,21 +101,22 @@ CVoid GDynamicEngine::process(GElementPtr element, CBool affinity) {
         return;
     }
 
-    const auto& execute = [this, element] {
+    const auto& exec = [this, element] {
+        element->beforeRun();
         const CStatus& curStatus = element->fatProcessor(CFunctionType::RUN);
         if (unlikely(curStatus.isErr())) {
             // 当且仅当整体状正常，且当前状态异常的时候，进入赋值逻辑。确保不重复赋值
+            CGRAPH_LOCK_GUARD lk(status_lock_);
             cur_status_ += curStatus;
         }
         afterElementRun(element);
     };
 
-    if (affinity
-        && CGRAPH_DEFAULT_BINDING_INDEX == element->getBindingIndex()) {
+    if (affinity && element->isDefaultBinding()) {
         // 如果 affinity=true，表示用当前的线程，执行这个逻辑。以便增加亲和性
-        execute();
+        exec();
     } else {
-        thread_pool_->commit(execute, calcIndex(element));
+        thread_pool_->execute(exec, element->binding_index_);
     }
 }
 
@@ -154,7 +124,7 @@ CVoid GDynamicEngine::process(GElementPtr element, CBool affinity) {
 CVoid GDynamicEngine::afterElementRun(GElementPtr element) {
     element->done_ = true;
     if (!element->run_before_.empty() && cur_status_.isOK()) {
-        if (1 == element->run_before_.size() && (*element->run_before_.begin())->isLinkable()) {
+        if (internal::GElementShape::LINKABLE == element->shape_) {
             // 针对linkable 的情况，做特殊判定
             process(*(element->run_before_.begin()), true);
         } else {
@@ -242,9 +212,9 @@ CVoid GDynamicEngine::parallelRunAll() {
     std::vector<std::future<CStatus>> futures;
     futures.reserve(total_end_size_);
     for (int i = 0; i < total_end_size_; i++) {
-        futures.emplace_back(thread_pool_->commit([this, i] {
+        futures.emplace_back(std::move(thread_pool_->commit([this, i] {
             return total_element_arr_[i]->fatProcessor(CFunctionType::RUN);
-        }, calcIndex(total_element_arr_[i])));
+        }, total_element_arr_[i]->binding_index_)));
     }
 
     for (auto& fut : futures) {
